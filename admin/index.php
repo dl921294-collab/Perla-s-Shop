@@ -36,24 +36,49 @@ if (isset($_SESSION['admin_logged']) && $_SESSION['admin_logged'] === true) {
         $precio = floatval($_POST['precio']);
         $stock = intval($_POST['stock']);
         $imagen_nombre = 'default.jpg';
+        $error_subida = false;
 
-        // Subida de imagen
-        if (isset($_FILES['imagen']) && $_FILES['imagen']['error'] === UPLOAD_ERR_OK) {
-            $ext = pathinfo($_FILES['imagen']['name'], PATHINFO_EXTENSION);
-            $imagen_nombre = time() . '_' . uniqid() . '.' . $ext;
-            
-            $dir_destino = '../assets/img/';
-            if (!file_exists($dir_destino)) {
-                mkdir($dir_destino, 0777, true);
+        // Subida de imagen con validación de peso (Máximo 10 MB)
+        if (isset($_FILES['imagen']) && $_FILES['imagen']['error'] !== UPLOAD_ERR_NO_FILE) {
+            $max_bytes = 10 * 1024 * 1024; // 10 MB en bytes
+
+            // Comprobar si supera el peso en el script o a nivel del servidor PHP
+            if ($_FILES['imagen']['error'] === UPLOAD_ERR_INI_SIZE || $_FILES['imagen']['error'] === UPLOAD_ERR_FORM_SIZE || $_FILES['imagen']['size'] > $max_bytes) {
+                $mensaje = "Error: La imagen supera el tamaño máximo permitido de 10 MB.";
+                $tipo_mensaje = "error";
+                $error_subida = true;
+            } elseif ($_FILES['imagen']['error'] === UPLOAD_ERR_OK) {
+                $ext = strtolower(pathinfo($_FILES['imagen']['name'], PATHINFO_EXTENSION));
+                $ext_permitidas = ['jpg', 'jpeg', 'png', 'webp'];
+
+                if (!in_array($ext, $ext_permitidas)) {
+                    $mensaje = "Formato de imagen no válido. Usa JPG, PNG o WEBP.";
+                    $tipo_mensaje = "error";
+                    $error_subida = true;
+                } else {
+                    $imagen_nombre = time() . '_' . uniqid() . '.' . $ext;
+                    $dir_destino = '../assets/img/';
+
+                    if (!file_exists($dir_destino)) {
+                        mkdir($dir_destino, 0777, true);
+                    }
+                    move_uploaded_file($_FILES['imagen']['tmp_name'], $dir_destino . $imagen_nombre);
+                }
+            } else {
+                $mensaje = "Error al procesar la subida de la imagen.";
+                $tipo_mensaje = "error";
+                $error_subida = true;
             }
-            move_uploaded_file($_FILES['imagen']['tmp_name'], $dir_destino . $imagen_nombre);
         }
 
-        $sql = "INSERT INTO productos (nombre, descripcion, precio, stock, imagen) VALUES (?, ?, ?, ?, ?)";
-        $stmt = $pdo->prepare($sql);
-        if ($stmt->execute([$nombre, $descripcion, $precio, $stock, $imagen_nombre])) {
-            $mensaje = "Producto publicado con éxito.";
-            $tipo_mensaje = "exito";
+        // Si la imagen pasa las validaciones, se guarda en la base de datos
+        if (!$error_subida) {
+            $sql = "INSERT INTO productos (nombre, descripcion, precio, stock, imagen) VALUES (?, ?, ?, ?, ?)";
+            $stmt = $pdo->prepare($sql);
+            if ($stmt->execute([$nombre, $descripcion, $precio, $stock, $imagen_nombre])) {
+                $mensaje = "Producto publicado con éxito.";
+                $tipo_mensaje = "exito";
+            }
         }
     }
 
@@ -259,7 +284,7 @@ if (isset($_SESSION['admin_logged']) && $_SESSION['admin_logged'] === true) {
                         <input type="number" name="stock" class="form-control" value="1" min="0" required>
                     </div>
                     <div class="form-group">
-                        <label>Imagen del Producto:</label>
+                        <label>Imagen del Producto (Máx. 10MB):</label>
                         <input type="file" name="imagen" class="form-control" accept="image/*">
                     </div>
                     <button type="submit" name="agregar_producto" class="btn-primary">Publicar Producto</button>
