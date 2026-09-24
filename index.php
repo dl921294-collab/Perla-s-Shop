@@ -68,17 +68,6 @@ try {
             align-items: center;
         }
 
-        .logo {
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: var(--primary-color);
-            text-decoration: none;
-        }
-
-        .logo span {
-            color: var(--dark-color);
-        }
-
         .nav-links {
             list-style: none;
             display: flex;
@@ -183,13 +172,6 @@ try {
         .product-title {
             font-size: 1.1rem;
             font-weight: 600;
-            margin-bottom: 0.5rem;
-        }
-
-        .product-price {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: var(--primary-color);
             margin-bottom: 0.5rem;
         }
 
@@ -349,7 +331,6 @@ try {
     <!-- Navegación -->
     <header>
         <nav class="navbar">
-            <a href="index.php" class="logo">Perla's <span>Shop</span></a>
             <ul class="nav-links">
                 <li><a href="index.php">Inicio</a></li>
                 <li><a href="#productos">Productos</a></li>
@@ -376,17 +357,16 @@ try {
                     <?php 
                         $rutaImagen = "assets/img/" . $producto['imagen'];
                         if (!file_exists($rutaImagen) || empty($producto['imagen'])) {
-                            $rutaImagen = "https://via.placeholder.com/300x220?text=Perlas+Shop";
+                            $rutaImagen = "https://placehold.co/300x220?text=Perlas+Shop";
                         }
 
-                        // Construir mensaje dinámico de WhatsApp
-                        $mensajeWS = "Hola Perla's Shop, me interesa comprar *" . $producto['nombre'] . "* por un precio de L. " . number_format($producto['precio'], 2) . ". ¿Tienen disponible?";
+                        // Mensaje dinámico de WhatsApp sin el precio
+                        $mensajeWS = "Hola Perla's Shop, me interesa comprar *" . $producto['nombre'] . "*. ¿Tienen disponible?";
                         $urlWhatsApp = "https://wa.me/" . $telefono_whatsapp . "?text=" . urlencode($mensajeWS);
                     ?>
                     
                     <div class="product-card"
                          data-nombre="<?php echo htmlspecialchars($producto['nombre']); ?>"
-                         data-precio="<?php echo number_format($producto['precio'], 2); ?>"
                          data-stock="<?php echo $producto['stock']; ?>"
                          data-descripcion="<?php echo htmlspecialchars($producto['descripcion']); ?>"
                          data-imagen="<?php echo $rutaImagen; ?>"
@@ -396,7 +376,6 @@ try {
                         <img src="<?php echo $rutaImagen; ?>" alt="<?php echo htmlspecialchars($producto['nombre']); ?>" class="product-img">
                         <div class="product-info">
                             <h3 class="product-title"><?php echo htmlspecialchars($producto['nombre']); ?></h3>
-                            <div class="product-price">L. <?php echo number_format($producto['precio'], 2); ?></div>
                             
                             <?php if ($producto['stock'] > 0): ?>
                                 <span class="product-stock stock-available">
@@ -428,7 +407,6 @@ try {
                 <img id="modalImg" src="" alt="Producto" class="modal-img">
                 <div class="modal-details">
                     <h2 id="modalNombre"></h2>
-                    <div id="modalPrecio" class="product-price"></div>
                     <span id="modalStock" class="product-stock"></span>
                     
                     <p class="modal-desc-title">Descripción:</p>
@@ -450,14 +428,12 @@ try {
     <script>
         function verDetalles(card) {
             const nombre = card.getAttribute('data-nombre');
-            const precio = card.getAttribute('data-precio');
             const stock = parseInt(card.getAttribute('data-stock'));
             const descripcion = card.getAttribute('data-descripcion');
             const imagen = card.getAttribute('data-imagen');
             const urlWS = card.getAttribute('data-urlws');
 
             document.getElementById('modalNombre').innerText = nombre;
-            document.getElementById('modalPrecio').innerText = 'L. ' + precio;
             document.getElementById('modalDescripcion').innerText = descripcion ? descripcion : 'Este producto no cuenta con una descripción detallada por el momento.';
             document.getElementById('modalImg').src = imagen;
 
