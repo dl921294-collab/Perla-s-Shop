@@ -29,11 +29,11 @@ if (isset($_GET['logout'])) {
 // --- 3. ACCIONES DE ADMINISTRADOR ---
 if (isset($_SESSION['admin_logged']) && $_SESSION['admin_logged'] === true) {
 
-    // Agregar producto
+    // Agregar producto (sin precio)
     if (isset($_POST['agregar_producto'])) {
         $nombre = trim($_POST['nombre']);
         $descripcion = trim($_POST['descripcion']);
-        $precio = floatval($_POST['precio']);
+        $precio = 0; // Se establece a 0 por defecto
         $stock = intval($_POST['stock']);
         $imagen_nombre = 'default.jpg';
         $error_subida = false;
@@ -42,7 +42,6 @@ if (isset($_SESSION['admin_logged']) && $_SESSION['admin_logged'] === true) {
         if (isset($_FILES['imagen']) && $_FILES['imagen']['error'] !== UPLOAD_ERR_NO_FILE) {
             $max_bytes = 10 * 1024 * 1024; // 10 MB en bytes
 
-            // Comprobar si supera el peso en el script o a nivel del servidor PHP
             if ($_FILES['imagen']['error'] === UPLOAD_ERR_INI_SIZE || $_FILES['imagen']['error'] === UPLOAD_ERR_FORM_SIZE || $_FILES['imagen']['size'] > $max_bytes) {
                 $mensaje = "Error: La imagen supera el tamaño máximo permitido de 10 MB.";
                 $tipo_mensaje = "error";
@@ -82,17 +81,65 @@ if (isset($_SESSION['admin_logged']) && $_SESSION['admin_logged'] === true) {
         }
     }
 
-    // Actualizar Producto (Nombre, Precio y Stock)
+    // Actualizar Producto (Nombre, Stock e Imagen)
     if (isset($_POST['actualizar_producto'])) {
         $id = intval($_POST['id_producto']);
         $nombre = trim($_POST['nombre']);
-        $precio = floatval($_POST['precio']);
         $stock = intval($_POST['nuevo_stock']);
+        $error_subida = false;
 
-        $stmt = $pdo->prepare("UPDATE productos SET nombre = ?, precio = ?, stock = ? WHERE id = ?");
-        if ($stmt->execute([$nombre, $precio, $stock, $id])) {
-            $mensaje = "Producto actualizado correctamente.";
-            $tipo_mensaje = "exito";
+        // Comprobar si se seleccionó una nueva imagen para cambiar la existente
+        if (isset($_FILES['nueva_imagen']) && $_FILES['nueva_imagen']['error'] !== UPLOAD_ERR_NO_FILE) {
+            $max_bytes = 10 * 1024 * 1024; // 10 MB
+
+            if ($_FILES['nueva_imagen']['error'] === UPLOAD_ERR_INI_SIZE || $_FILES['nueva_imagen']['error'] === UPLOAD_ERR_FORM_SIZE || $_FILES['nueva_imagen']['size'] > $max_bytes) {
+                $mensaje = "Error: La nueva imagen supera el tamaño máximo permitido de 10 MB.";
+                $tipo_mensaje = "error";
+                $error_subida = true;
+            } elseif ($_FILES['nueva_imagen']['error'] === UPLOAD_ERR_OK) {
+                $ext = strtolower(pathinfo($_FILES['nueva_imagen']['name'], PATHINFO_EXTENSION));
+                $ext_permitidas = ['jpg', 'jpeg', 'png', 'webp'];
+
+                if (!in_array($ext, $ext_permitidas)) {
+                    $mensaje = "Formato de imagen no válido. Usa JPG, PNG o WEBP.";
+                    $tipo_mensaje = "error";
+                    $error_subida = true;
+                } else {
+                    $nueva_img_nombre = time() . '_' . uniqid() . '.' . $ext;
+                    $dir_destino = '../assets/img/';
+
+                    if (!file_exists($dir_destino)) {
+                        mkdir($dir_destino, 0777, true);
+                    }
+
+                    if (move_uploaded_file($_FILES['nueva_imagen']['tmp_name'], $dir_destino . $nueva_img_nombre)) {
+                        // Actualizar en BD cambiando también el nombre de la imagen
+                        $stmt = $pdo->prepare("UPDATE productos SET nombre = ?, stock = ?, imagen = ? WHERE id = ?");
+                        $stmt->execute([$nombre, $stock, $nueva_img_nombre, $id]);
+                        $mensaje = "Producto e imagen actualizados correctamente.";
+                        $tipo_mensaje = "exito";
+                    } else {
+                        $mensaje = "Error al guardar la nueva imagen en el servidor.";
+                        $tipo_mensaje = "error";
+                        $error_subida = true;
+                    }
+                }
+            } else {
+                $mensaje = "Error al procesar la nueva imagen.";
+                $tipo_mensaje = "error";
+                $error_subida = true;
+            }
+        }
+
+        // Si no se envió nueva imagen, solo actualizamos nombre y stock
+        if (!isset($_FILES['nueva_imagen']) || $_FILES['nueva_imagen']['error'] === UPLOAD_ERR_NO_FILE) {
+            if (!$error_subida) {
+                $stmt = $pdo->prepare("UPDATE productos SET nombre = ?, stock = ? WHERE id = ?");
+                if ($stmt->execute([$nombre, $stock, $id])) {
+                    $mensaje = "Producto actualizado correctamente.";
+                    $tipo_mensaje = "exito";
+                }
+            }
         }
     }
 
@@ -203,8 +250,46 @@ if (isset($_SESSION['admin_logged']) && $_SESSION['admin_logged'] === true) {
         table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
         th, td { padding: 0.75rem 0.5rem; text-align: left; border-bottom: 1px solid #eee; font-size: 0.9rem; vertical-align: middle; }
         th { background-color: #fafafa; font-weight: 600; }
-        .img-thumb { width: 50px; height: 50px; object-fit: cover; border-radius: 6px; }
         
+        /* Contenedor de edición de imagen dentro de la tabla */
+        .img-edit-box {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 50px;
+        }
+        .img-thumb {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 6px;
+            display: block;
+        }
+        .btn-change-img {
+            position: absolute;
+            bottom: -4px;
+            right: -4px;
+            background: var(--primary-color);
+            color: var(--white);
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: transform 0.2s, background 0.2s;
+        }
+        .btn-change-img:hover {
+            transform: scale(1.15);
+            background: var(--dark-color);
+        }
+        .input-file-hidden {
+            display: none;
+        }
+
         /* Inputs dentro de la tabla */
         .tbl-input {
             padding: 0.4rem;
@@ -213,7 +298,6 @@ if (isset($_SESSION['admin_logged']) && $_SESSION['admin_logged'] === true) {
             font-size: 0.88rem;
         }
         .input-nombre { width: 100%; min-width: 120px; font-weight: 600; }
-        .input-precio { width: 85px; }
         .input-stock { width: 60px; text-align: center; }
 
         .action-btns { display: flex; gap: 0.4rem; align-items: center; }
@@ -263,7 +347,7 @@ if (isset($_SESSION['admin_logged']) && $_SESSION['admin_logged'] === true) {
 
         <div class="dashboard-grid">
             
-            <!-- FORMULARIO PARA SUBIR PRODUCTO -->
+            <!-- FORMULARIO PARA SUBIR PRODUCTO (SIN CAMPO DE PRECIO) -->
             <div class="card">
                 <h3><i class="fa-solid fa-plus-circle"></i> Agregar Producto</h3>
                 <form method="POST" action="" enctype="multipart/form-data">
@@ -274,10 +358,6 @@ if (isset($_SESSION['admin_logged']) && $_SESSION['admin_logged'] === true) {
                     <div class="form-group">
                         <label>Descripción:</label>
                         <textarea name="descripcion" class="form-control" rows="3"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Precio (L.):</label>
-                        <input type="number" step="0.01" name="precio" class="form-control" required>
                     </div>
                     <div class="form-group">
                         <label>Stock Inicial:</label>
@@ -301,7 +381,6 @@ if (isset($_SESSION['admin_logged']) && $_SESSION['admin_logged'] === true) {
                             <tr>
                                 <th>Imagen</th>
                                 <th>Producto</th>
-                                <th>Precio (L.)</th>
                                 <th>Stock</th>
                                 <th>Acción</th>
                             </tr>
@@ -311,22 +390,25 @@ if (isset($_SESSION['admin_logged']) && $_SESSION['admin_logged'] === true) {
                                 <?php $form_id = "form-edit-" . $prod['id']; ?>
                                 <tr>
                                     <!-- Formulario invisible que conecta los campos de la fila mediante el atributo form -->
-                                    <form id="<?php echo $form_id; ?>" method="POST" action=""></form>
+                                    <form id="<?php echo $form_id; ?>" method="POST" action="" enctype="multipart/form-data"></form>
 
                                     <td>
                                         <?php 
                                             $imgSrc = "../assets/img/" . $prod['imagen'];
                                             if (!file_exists($imgSrc) || empty($prod['imagen'])) {
-                                                $imgSrc = "https://via.placeholder.com/50";
+                                                $imgSrc = "https://placehold.co/50x50?text=Sin+Img";
                                             }
                                         ?>
-                                        <img src="<?php echo $imgSrc; ?>" class="img-thumb" alt="Img">
+                                        <div class="img-edit-box">
+                                            <img id="preview-<?php echo $prod['id']; ?>" src="<?php echo $imgSrc; ?>" class="img-thumb" alt="Img">
+                                            <label for="file-<?php echo $prod['id']; ?>" class="btn-change-img" title="Cambiar Imagen">
+                                                <i class="fa-solid fa-camera"></i>
+                                            </label>
+                                            <input type="file" id="file-<?php echo $prod['id']; ?>" form="<?php echo $form_id; ?>" name="nueva_imagen" accept="image/*" class="input-file-hidden" onchange="previewImagen(this, 'preview-<?php echo $prod['id']; ?>')">
+                                        </div>
                                     </td>
                                     <td>
                                         <input type="text" form="<?php echo $form_id; ?>" name="nombre" value="<?php echo htmlspecialchars($prod['nombre']); ?>" class="tbl-input input-nombre" required>
-                                    </td>
-                                    <td>
-                                        <input type="number" step="0.01" form="<?php echo $form_id; ?>" name="precio" value="<?php echo $prod['precio']; ?>" class="tbl-input input-precio" required>
                                     </td>
                                     <td>
                                         <input type="number" form="<?php echo $form_id; ?>" name="nuevo_stock" value="<?php echo $prod['stock']; ?>" class="tbl-input input-stock" min="0" required>
@@ -360,6 +442,18 @@ if (isset($_SESSION['admin_logged']) && $_SESSION['admin_logged'] === true) {
     </div>
 
 <?php endif; ?>
+
+    <script>
+        function previewImagen(input, imgId) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById(imgId).src = e.target.result;
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+    </script>
 
 </body>
 </html>
